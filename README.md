@@ -1,33 +1,44 @@
 This repo contains a minimal **end-to-end encrypted** chat app (client + lightweight signaling server).
+1. Ensure Node.js (>=16) and npm are installed. On Linux:
+```bash
+sudo apt update
+sudo apt install -y nodejs npm # Debian/Ubuntu
+# or
+sudo dnf install -y nodejs npm # Fedora
+# or use nvm for latest Node: https://github.com/nvm-sh/nvm
+```
 
 
-Principles:
-- Clients perform ECDH (P-256) key agreement with each peer.
-- Messages are encrypted with per-peer AES-GCM keys derived from ECDH.
-- Server only relays signaling and ciphertext — it never sees plaintext keys.
+2. Start the server:
+```bash
+cd server
+npm install
+node server-index.js
+```
+The server listens on port 3001 by default.
 
 
-Included files:
-- client (React single-file app: `src/App.jsx`)
-- server (Node.js express + ws: `server-index.js`)
-- README usage notes below.
+### Client (Linux / macOS / Windows)
 
 
-## Quick start
+1. In a separate terminal:
+```bash
+cd client
+npm install
+npm run dev # or: npm start, depending on your bundler (Vite, CRA, etc.)
+```
 
 
-### Server
-1. `cd server`
-2. `npm install` (express, ws, cors)
-3. `node server-index.js` (defaults to port 3001)
+2. Open the URL shown in the console (usually http://localhost:5173 or http://localhost:3000).
 
 
-### Client (dev)
-1. `cd client`
-2. `npm install`
-3. `npm run dev` or `npm start` depending on your bundler
-4. Open the app, choose a room name and username, connect.
+3. Enter a room name and username, then connect.
 
+
+### Notes & limitations
+- This is a minimal demo. For production, add authentication, certificate checks, message ordering, replay protection, group key management, persistent message storage (server should store ciphertext only), offline delivery, and UI polish.
+- ECDH with P-256 and AES-GCM is used; consider X25519 + HKDF + AES-GCM or AES-SIV for stronger guarantees in production.
+- 
 
 Notes & limitations:
 - This is a minimal demo. For production, add authentication, certificate checks, message ordering, replay protection, group key management, persistent message storage (server should store ciphertext only), offline delivery, and UI polish.
