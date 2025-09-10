@@ -1,0 +1,76 @@
+
+const express = require('express');
+const http = require('http');
+const WebSocket = require('ws');
+const cors = require('cors');
+
+const app = express();
+app.use(cors());
+const server = http.createServer(app);
+const wss = new WebSocket.Server({ server });
+
+// rooms: { roomName: Set of clients }
+const rooms = new Map();
+
+wss.on('connection', (ws) => {
+  ws.id = Math.random().toString(36).slice(2, 9);
+  ws.room = null;
+  ws.on('message', (msg) => {
+    let data;
+    try { data = JSON.parse(msg); } catch (e) { return; }
+
+    const { type } = data;
+    if (type === 'join') {
+      const { room, username } = data;
+      ws.room = room;
+      ws.username = username;
+      if (!rooms.has(room)) rooms.set(room, new Set());
+      rooms.get(room).add(ws);
+      // let new peer know about existing peers' metadata
+      const peers = [];
+      for (const c of rooms.get(room)) {
+        if (c !== ws && c.username && c.id) peers.push({ id: c.id, username: c.username, pubkey: c.pubkey || null });
+      }
+      ws.send(JSON.stringify({ type: 'peers', peers, you: ws.id }));
+      // notify others that someone joined (so they can share pubkey when ready)
+      broadcastToRoom(room, { type: 'peer-joined', id: ws.id, username }, ws);
+    }
+
+    if (type === 'announce-pubkey') {
+      // store pubkey on ws and broadcast to room
+      ws.pubkey = data.pubkey; // base64 string
+      broadcastToRoom(ws.room, { type: 'peer-pubkey', id: ws.id, pubkey: data.pubkey }, ws);
+    }
+
+    if (type === 'encr-message') {
+      // Forward encrypted payload to a single target client (to keeps E2EE simple)
+      const { to } = data;
+      const target = [...(rooms.get(ws.room) || [])].find(c => c.id === to);
+      if (target && target.readyState === WebSocket.OPEN) {
+        target.send(JSON.stringify({ ...data, from: ws.id }));
+      }
+    }
+
+    if (type === 'broadcast-encr-message') {
+      // An option to broadcast ciphertext to whole room (each client must be able to decrypt)
+      broadcastToRoom(ws.room, { ...data, from: ws.id }, ws);
+    }
+  });
+
+  ws.on('close', () => {
+    if (ws.room && rooms.has(ws.room)) {
+      rooms.get(ws.room).delete(ws);
+      broadcastToRoom(ws.room, { type: 'peer-left', id: ws.id });
+    }
+  });
+});
+
+function broadcastToRoom(room, payload, exceptWs = null) {
+  if (!rooms.has(room)) return;
+  for (const c of rooms.get(room)) {
+    if (c !== exceptWs && c.readyState === WebSocket.OPEN) c.send(JSON.stringify(payload));
+  }
+}
+
+const PORT = process.env.PORT || 3001;
+server.listen(PORT, () => console.log(`Signaling server listening on ${PORT}`));
